@@ -15,15 +15,41 @@ The poller logs in to the SBC REST API, then reads `GET /rest/sipsg`. Operationa
 
 A failed poll does not mark every trunk down. After several failures Edge Watch emails that the SBC itself is unreachable, and it emails again when polling succeeds.
 
-## Run it in Docker
+## Install with Node.js
+
+Install [Node.js 22](https://nodejs.org/) or newer, then from this folder:
 
 ```bash
-docker compose up --build
+npm install
+npm run dev
 ```
 
-Open http://127.0.0.1:3847. With no SBC configured, the app starts in demo mode so you can simulate an outage and inspect the alert. Settings are stored in the `edge-watch-data` volume and survive restarts. Environment variables in `.env` seed that database the first time it is created.
+Open http://127.0.0.1:3847. The same two commands work in PowerShell, Command Prompt, and WSL. With no SBC configured, the app starts in demo mode so you can simulate an outage and read the alert.
 
-Copy `.env.example` to `.env` and set the live values:
+For a long-running process:
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` includes the background poller. `npm test` covers the Ribbon XML parser, alarm transitions, a fake SBC, and the mail decision.
+
+### Connect a live SBC
+
+You can enter the SBC and SMTP settings in the web UI. To seed them on the first launch instead, copy the example file and edit it before starting the app.
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS, Linux, or WSL:
+
+```bash
+cp .env.example .env
+```
 
 ```bash
 SBC_HOST=sbc.example.com
@@ -35,29 +61,30 @@ SMTP_PORT=587
 SMTP_FROM=Edge Watch <noc@example.com>
 ```
 
-The REST account has to be created in the SBC Web UI with the **REST** access level before login will succeed. Most appliances ship a self-signed certificate, so TLS verification is off unless `SBC_TLS_VERIFY=true`.
+On macOS, Linux, or WSL, use `cp .env.example .env`. Those variables are read only while `./data` is still empty. After that, Settings in the UI is what the monitor keeps.
 
-To catch mail locally, start the optional inbox and point SMTP at it:
+The REST account has to be created in the SBC Web UI with the **REST** access level before login will succeed. Most appliances ship a self-signed certificate, so TLS verification stays off unless `SBC_TLS_VERIFY=true`.
+
+Set `MONITOR_PASSWORD` to require a password for the UI and API. The session cookie is not marked Secure unless `MONITOR_COOKIE_SECURE=true`, so the lock works over plain HTTP on a trusted network.
+
+## Install with Docker
+
+Docker is optional. With Docker Desktop or Docker Engine installed:
+
+```bash
+docker compose up --build
+```
+
+The app listens on http://127.0.0.1:3847. Settings are stored in the `edge-watch-data` volume. A `.env` file next to `docker-compose.yml` seeds that volume the first time it is created. Use the same variables as `.env.example`.
+
+To catch mail locally, start the optional inbox and point SMTP at the Compose network:
 
 ```bash
 docker compose --profile mail up --build
 ```
 
-Set `SMTP_HOST=mailpit` and `SMTP_PORT=1025` on the `edge-watch` service. The inbox is at http://127.0.0.1:8025.
-
-Set `MONITOR_PASSWORD` to require a password for the UI and API. The session cookie is not marked Secure unless `MONITOR_COOKIE_SECURE=true`, so the lock works over plain HTTP on a trusted network. Put the container behind HTTPS before exposing it further.
-
-## Run it locally
-
-Node.js 22 or newer:
-
-```bash
-npm install
-npm run dev
-```
-
-The dev server listens on http://127.0.0.1:3847. `npm test` covers the Ribbon XML parser, alarm transitions, a fake SBC, and the mail decision. `npm run build && npm start` runs the production server, including the background poller.
+Set `SMTP_HOST=mailpit` and `SMTP_PORT=1025`. The inbox is at http://127.0.0.1:8025.
 
 ## What gets stored
 
-SQLite lives in `DATA_DIR` (`./data` locally, `/data` in the container). It holds the SBC password, the SMTP password, trunk state, and alert history. The monitor only sends `GET` requests after login. It does not change the SBC.
+SQLite lives in `DATA_DIR` (`./data` for a Node install, `/data` in the container). It holds the SBC password, the SMTP password, trunk state, and alert history. The monitor only sends `GET` requests after login. It does not change the SBC.
