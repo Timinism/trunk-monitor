@@ -79,7 +79,9 @@ function openDatabase(): DatabaseSync {
   fs.mkdirSync(directory, { recursive: true });
   const db = new DatabaseSync(path.join(directory, "edge-watch.sqlite"));
   db.exec(`
-    PRAGMA journal_mode = WAL;
+    -- DELETE, not WAL. The WAL sidecar changes on read, and Next.js dev
+    -- treats that as a source change and reloads the page.
+    PRAGMA journal_mode = DELETE;
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL

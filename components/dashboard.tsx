@@ -320,7 +320,9 @@ function trunkGroups(data: Dashboard): { sbc: DashboardSbc; trunks: TrunkView[] 
   }
   return source.map((sbc) => ({
     sbc,
-    trunks: data.trunks.filter((trunk) => trunk.sbcId === sbc.id),
+    trunks: data.trunks.filter(
+      (trunk) => trunk.sbcId === sbc.id || (source.length === 1 && trunk.sbcId === ""),
+    ),
   }));
 }
 
