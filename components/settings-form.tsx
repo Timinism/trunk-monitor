@@ -281,11 +281,9 @@ export function SettingsForm() {
       </section>
 
       {note ? <p className="text-sm text-muted-foreground">{note}</p> : null}
-      <div className="sticky bottom-3">
-        <Button type="submit" size="lg" disabled={pending !== ""}>
-          {pending === "save" ? "Saving…" : "Save and poll"}
-        </Button>
-      </div>
+      <Button type="submit" size="lg" disabled={pending !== ""}>
+        {pending === "save" ? "Saving…" : "Save and poll"}
+      </Button>
     </form>
   );
 }
