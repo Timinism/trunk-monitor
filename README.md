@@ -87,6 +87,10 @@ docker compose --profile mail up --build
 
 Set `SMTP_HOST=mailpit` and `SMTP_PORT=1025`. The inbox is at http://127.0.0.1:8025.
 
+## LibreNMS plugin
+
+The same monitor is available as a local LibreNMS plugin under `librenms-plugin/RibbonTrunks`. Copy that folder to `app/Plugins/RibbonTrunks`, add the SBCs on the plugin settings page, and run `bin/poll.php` from cron. Mail goes out through LibreNMS. Install steps, the Docker mount, and the cron line are in [librenms-plugin/README.md](librenms-plugin/README.md).
+
 ## What gets stored
 
 SQLite lives in `DATA_DIR` (`./data` for a Node install, `/data` in the container). It holds the SBC password, the SMTP password, trunk state, and alert history. The monitor only sends `GET` requests after login. It does not change the SBC.
