@@ -5,6 +5,10 @@ import { emptyCallStats, type AdminState, type AlertEvent, type CallStats, type 
 
 export type StoredTrunk = {
   id: string;
+  sbcId: string;
+  sbcName: string;
+  sbcHost: string;
+  sgId: string;
   name: string;
   health: Health;
   alarmHealth: Health;
@@ -24,6 +28,15 @@ export type StoredTrunk = {
   updatedAt: string;
 };
 
+export type SbcRuntime = {
+  lastError: string | null;
+  consecutiveFailures: number;
+  unreachableAlertedAt: string | null;
+  nodeName: string;
+  softwareVersion: string;
+  lastSuccessAt: string | null;
+};
+
 export type PollState = {
   lastPollAt: string | null;
   lastSuccessAt: string | null;
@@ -33,6 +46,15 @@ export type PollState = {
   sbcName: string;
   softwareVersion: string;
   snapshotMode: MonitorMode | null;
+};
+
+const EMPTY_RUNTIME: SbcRuntime = {
+  lastError: null,
+  consecutiveFailures: 0,
+  unreachableAlertedAt: null,
+  nodeName: "",
+  softwareVersion: "",
+  lastSuccessAt: null,
 };
 
 const EMPTY_POLL: PollState = {
@@ -80,7 +102,11 @@ function openDatabase(): DatabaseSync {
       last_alert_at TEXT,
       simulated INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
-      call_stats TEXT
+      call_stats TEXT,
+      sbc_id TEXT NOT NULL DEFAULT '',
+      sbc_name TEXT NOT NULL DEFAULT '',
+      sbc_host TEXT NOT NULL DEFAULT '',
+      sg_id TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,8 +121,15 @@ function openDatabase(): DatabaseSync {
     );
   `);
   const columns = db.prepare("PRAGMA table_info(trunk_state)").all() as { name: string }[];
-  if (!columns.some((column) => column.name === "call_stats")) {
-    db.exec("ALTER TABLE trunk_state ADD COLUMN call_stats TEXT");
+  const additions: [string, string][] = [
+    ["call_stats", "ALTER TABLE trunk_state ADD COLUMN call_stats TEXT"],
+    ["sbc_id", "ALTER TABLE trunk_state ADD COLUMN sbc_id TEXT NOT NULL DEFAULT ''"],
+    ["sbc_name", "ALTER TABLE trunk_state ADD COLUMN sbc_name TEXT NOT NULL DEFAULT ''"],
+    ["sbc_host", "ALTER TABLE trunk_state ADD COLUMN sbc_host TEXT NOT NULL DEFAULT ''"],
+    ["sg_id", "ALTER TABLE trunk_state ADD COLUMN sg_id TEXT NOT NULL DEFAULT ''"],
+  ];
+  for (const [name, sql] of additions) {
+    if (!columns.some((column) => column.name === name)) db.exec(sql);
   }
   return db;
 }
@@ -143,6 +176,19 @@ export function savePollState(state: PollState) {
   writeJson("poll_state", state);
 }
 
+export function getSbcRuntimes(): Record<string, SbcRuntime> {
+  const stored = readJson<Record<string, Partial<SbcRuntime>>>("sbc_runtime") ?? {};
+  const runtimes: Record<string, SbcRuntime> = {};
+  for (const [id, value] of Object.entries(stored)) {
+    runtimes[id] = { ...EMPTY_RUNTIME, ...value };
+  }
+  return runtimes;
+}
+
+export function saveSbcRuntimes(runtimes: Record<string, SbcRuntime>) {
+  writeJson("sbc_runtime", runtimes);
+}
+
 export function getDemoDownIds(): string[] {
   return readJson<string[]>("demo_down_ids") ?? [];
 }
@@ -153,6 +199,10 @@ export function setDemoDownIds(ids: string[]) {
 
 type TrunkRow = {
   id: string;
+  sbc_id?: string | null;
+  sbc_name?: string | null;
+  sbc_host?: string | null;
+  sg_id?: string | null;
   name: string;
   health: Health;
   alarm_health: Health;
@@ -184,6 +234,10 @@ function parseCallStats(raw: string | null): CallStats {
 function trunkFromRow(row: TrunkRow): StoredTrunk {
   return {
     id: row.id,
+    sbcId: row.sbc_id ?? "",
+    sbcName: row.sbc_name ?? "",
+    sbcHost: row.sbc_host ?? "",
+    sgId: row.sg_id || row.id,
     name: row.name,
     health: row.health,
     alarmHealth: row.alarm_health,
@@ -206,7 +260,7 @@ function trunkFromRow(row: TrunkRow): StoredTrunk {
 
 export function listTrunks(): StoredTrunk[] {
   const rows = getDb()
-    .prepare("SELECT * FROM trunk_state ORDER BY CAST(id AS INTEGER), id")
+    .prepare("SELECT * FROM trunk_state ORDER BY sbc_name, sbc_id, CAST(sg_id AS INTEGER), sg_id, id")
     .all() as unknown as TrunkRow[];
   return rows.map(trunkFromRow);
 }
@@ -217,8 +271,8 @@ export function replaceTrunks(trunks: StoredTrunk[]) {
     INSERT INTO trunk_state (
       id, name, health, alarm_health, alarming, raw_status, status_label, admin_state,
       channels, current_calls, peers, interop, protocol, down_since, last_alert_at,
-      simulated, updated_at, call_stats
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      simulated, updated_at, call_stats, sbc_id, sbc_name, sbc_host, sg_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   db.exec("BEGIN");
   try {
@@ -243,6 +297,10 @@ export function replaceTrunks(trunks: StoredTrunk[]) {
         trunk.simulated ? 1 : 0,
         trunk.updatedAt,
         JSON.stringify(trunk.calls),
+        trunk.sbcId,
+        trunk.sbcName,
+        trunk.sbcHost,
+        trunk.sgId,
       );
     }
     db.exec("COMMIT");

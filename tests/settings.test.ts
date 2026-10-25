@@ -69,5 +69,86 @@ describe("settings", () => {
     });
     assert.equal(ready.sbcHost, "sbc.example.com");
     assert.equal(ready.sbcPassword, "secret");
+    assert.equal(ready.sbcs[0]?.host, "sbc.example.com");
+    assert.equal(ready.sbcs[0]?.password, "secret");
+  });
+
+  it("keeps each SBC password and allows more than one", () => {
+    const current = getSettings();
+    const first = mergeSettings(current, {
+      mode: "live",
+      sbcs: [
+        {
+          id: "edge-a",
+          name: "Chicago",
+          host: "sbc-a.example.com",
+          port: 443,
+          username: "rest",
+          password: "secret-a",
+          tlsVerify: false,
+          enabled: true,
+        },
+      ],
+    });
+    const second = mergeSettings(first, {
+      sbcs: [
+        {
+          id: "edge-a",
+          name: "Chicago",
+          host: "sbc-a.example.com",
+          port: 443,
+          username: "rest",
+          password: "",
+          tlsVerify: false,
+          enabled: true,
+        },
+        {
+          id: "edge-b",
+          name: "Dallas",
+          host: "sbc-b.example.com",
+          port: 8443,
+          username: "rest",
+          password: "secret-b",
+          tlsVerify: true,
+          enabled: true,
+        },
+      ],
+    });
+    assert.equal(second.sbcs.length, 2);
+    assert.equal(second.sbcs[0].password, "secret-a");
+    assert.equal(second.sbcs[1].password, "secret-b");
+    assert.equal(second.sbcs[1].tlsVerify, true);
+    assert.equal(second.sbcHost, "sbc-a.example.com");
+
+    const cleared = mergeSettings(second, {
+      mode: "demo",
+      sbcs: [
+        {
+          id: "edge-a",
+          name: "Chicago",
+          host: "sbc-a.example.com",
+          port: 443,
+          username: "rest",
+          password: "",
+          clearPassword: true,
+          tlsVerify: false,
+          enabled: true,
+        },
+        {
+          id: "edge-c",
+          name: "",
+          host: "",
+          port: 443,
+          username: "",
+          password: "",
+          tlsVerify: false,
+          enabled: true,
+        },
+      ],
+    });
+    assert.equal(cleared.mode, "demo");
+    assert.equal(cleared.sbcs.length, 1);
+    assert.equal(cleared.sbcs[0].password, "");
+    assert.throws(() => mergeSettings(cleared, { mode: "live" }), /REST password/);
   });
 });

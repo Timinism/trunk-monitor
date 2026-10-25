@@ -153,6 +153,10 @@ export function buildDemoTrunks(downIds: Iterable<string>): TrunkObservation[] {
     const health = classifyHealth(rawStatus, adminState);
     return {
       id: base.id,
+      sbcId: "demo",
+      sbcName: DEMO_NODE_NAME,
+      sbcHost: "demo",
+      sgId: base.id,
       name: base.name,
       health,
       rawStatus,

@@ -1,6 +1,6 @@
 # Edge Watch
 
-Edge Watch polls a [Ribbon SBC Edge](https://ribboncommunications.com/) (SBC 1000, SBC 2000, or SBC SWe Edge) and shows the status of every SIP signaling group. On that platform the signaling group is the SIP trunk. When a trunk goes down, Edge Watch sends an email and keeps a copy of the message in the alert log.
+Edge Watch polls one or more [Ribbon SBC Edge](https://ribboncommunications.com/) appliances (SBC 1000, SBC 2000, or SBC SWe Edge) and shows the status of every SIP signaling group. On that platform the signaling group is the SIP trunk. When a trunk goes down, Edge Watch sends an email and keeps a copy of the message in the alert log. The trunk list shows up or down until you select a row, which opens the peers, channels, and call counters.
 
 The poller logs in to the SBC REST API, then reads `GET /rest/sipsg`. It does not change the SBC. Operational state comes from `rt_Status`. The same response supplies the call counters on each trunk: active calls, channels, ingress and egress calls in progress, connected calls, and the cumulative attempt, accepted, completed, rejected, refused, blocked, and errored totals.
 
@@ -13,7 +13,7 @@ The poller logs in to the SBC REST API, then reads `GET /rest/sipsg`. It does no
 | `sgsUpDraining` / `sgsUpDrained` | Draining or drained | Only if enabled |
 | Admin disabled | Taken out of service on purpose | No |
 
-A failed poll does not mark every trunk down. After several failures Edge Watch emails that the SBC itself is unreachable, and it emails again when polling succeeds.
+A failed poll does not mark every trunk down. After several failures Edge Watch emails that the SBC itself is unreachable, and it emails again when polling succeeds. Each SBC is checked on its own, so one appliance being unreachable leaves the others on the trunk page.
 
 ## Install with Node.js
 
@@ -39,7 +39,7 @@ npm start
 
 ### Connect a live SBC
 
-Open Settings in the web UI. Choose **Live SBC**, then enter the SBC address, HTTPS port, REST username, and REST password. Save and poll stores them in this app and checks the trunk on the next poll. SMTP recipients, host, username, and password are on that same page.
+Open Settings in the web UI. Choose **Live SBC**, then add each appliance with its address, HTTPS port, REST username, and REST password. Save and poll stores them in this app and checks every enabled SBC on the next poll. SMTP recipients, host, username, and password are on that same page.
 
 A `.env` file can seed those values only while `./data` is still empty. After that, the Settings page is what the monitor uses, including when the environment variables still hold the old address or password. To seed the first launch instead of typing into the page, copy the example file and edit it before starting the app.
 

@@ -16,6 +16,10 @@ function trunk(partial: Partial<TrunkObservation> & Pick<TrunkObservation, "id" 
     interop: partial.interop ?? "Standard",
     protocol: partial.protocol ?? "UDP 5060",
     serverClusterId: partial.serverClusterId ?? "",
+    sbcId: "",
+    sbcName: "",
+    sbcHost: "",
+    sgId: partial.id,
     ...partial,
   };
 }
@@ -110,5 +114,7 @@ describe("evaluateAlarms", () => {
     assert.equal(matchesWatchFilter({ id: "3", name: "Microsoft Teams Direct Routing" }, "teams, fax"), true);
     assert.equal(matchesWatchFilter({ id: "3", name: "Microsoft Teams Direct Routing" }, "1, Lumen"), false);
     assert.equal(matchesWatchFilter({ id: "3", name: "Microsoft Teams Direct Routing" }, "3"), true);
+    assert.equal(matchesWatchFilter({ id: "edge-a:3", sgId: "3", name: "Microsoft Teams Direct Routing" }, "3"), true);
+    assert.equal(matchesWatchFilter({ id: "edge-a:3", sgId: "3", name: "Microsoft Teams Direct Routing" }, "edge-a:3"), true);
   });
 });

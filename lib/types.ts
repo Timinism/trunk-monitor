@@ -12,9 +12,25 @@ export type SipSgStatus =
 
 export type AdminState = "enabled" | "disabled" | "drain" | "unknown";
 
+export type SbcConfig = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  tlsVerify: boolean;
+  enabled: boolean;
+};
+
+export type PublicSbc = Omit<SbcConfig, "password"> & {
+  passwordSet: boolean;
+};
+
 export type Settings = {
   mode: MonitorMode;
   monitoringEnabled: boolean;
+  sbcs: SbcConfig[];
   sbcHost: string;
   sbcPort: number;
   sbcUsername: string;
@@ -37,7 +53,8 @@ export type Settings = {
   timezone: string;
 };
 
-export type PublicSettings = Omit<Settings, "sbcPassword" | "smtpPassword"> & {
+export type PublicSettings = Omit<Settings, "sbcPassword" | "smtpPassword" | "sbcs"> & {
+  sbcs: PublicSbc[];
   sbcPasswordSet: boolean;
   smtpPasswordSet: boolean;
 };
@@ -86,6 +103,10 @@ export function emptyCallStats(): CallStats {
 
 export type TrunkObservation = {
   id: string;
+  sbcId: string;
+  sbcName: string;
+  sbcHost: string;
+  sgId: string;
   name: string;
   health: Health;
   rawStatus: SipSgStatus | "unknown";
@@ -120,6 +141,10 @@ export type AlertEvent = {
 
 export type TrunkView = {
   id: string;
+  sbcId: string;
+  sbcName: string;
+  sbcHost: string;
+  sgId: string;
   name: string;
   health: Health;
   statusLabel: string;
@@ -149,9 +174,21 @@ export type PollView = {
   monitoringEnabled: boolean;
 };
 
+export type DashboardSbc = {
+  id: string;
+  name: string;
+  host: string;
+  enabled: boolean;
+  nodeName: string;
+  softwareVersion: string;
+  lastError: string | null;
+  consecutiveFailures: number;
+};
+
 export type Dashboard = {
   mode: MonitorMode;
   sbcHost: string;
+  sbcs: DashboardSbc[];
   poll: PollView;
   summary: {
     total: number;

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import type { AlertEvent, CallStats, Dashboard, Health, TrunkView } from "@/lib/types";
+import type { AlertEvent, CallStats, Dashboard, DashboardSbc, Health, TrunkView } from "@/lib/types";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -53,6 +54,7 @@ export function DashboardView() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
@@ -127,6 +129,9 @@ export function DashboardView() {
     : null;
   const remain = nextAt == null ? null : Math.max(0, Math.ceil((nextAt - now) / 1000));
   const modeMismatch = data.poll.snapshotMode && data.poll.snapshotMode !== data.mode;
+  const liveSbcs = data.sbcs.filter((sbc) => sbc.enabled);
+  const multiple = data.mode === "live" && liveSbcs.length > 1;
+  const groups = trunkGroups(data);
 
   return (
     <div className="grid gap-5">
@@ -157,14 +162,18 @@ export function DashboardView() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs tracking-[0.16em] text-muted-foreground uppercase">
-              {data.mode === "demo" ? "Demo SBC" : data.sbcHost || "Live SBC"}
+              {multiple ? "Live SBCs" : data.mode === "demo" ? "Demo SBC" : data.sbcHost || "Live SBC"}
             </p>
             <h1 className="mt-1 font-heading text-4xl tracking-tight">
-              {data.poll.sbcName || (data.mode === "demo" ? "edge-lab-01" : "Waiting for the first poll")}
+              {multiple
+                ? `${liveSbcs.length} SBCs`
+                : data.poll.sbcName || (data.mode === "demo" ? "edge-lab-01" : "Waiting for the first poll")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {data.poll.softwareVersion || "SIP signaling groups"}
-              {data.poll.softwareVersion ? " · SIP signaling groups" : ""}
+              {multiple
+                ? liveSbcs.map((sbc) => sbc.nodeName || sbc.name || sbc.host).join(" · ")
+                : data.poll.softwareVersion || "SIP signaling groups"}
+              {!multiple && data.poll.softwareVersion ? " · SIP signaling groups" : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -204,35 +213,57 @@ export function DashboardView() {
         </p>
       </section>
 
-      {data.trunks.length === 0 ? (
+      {data.trunks.length === 0 && groups.length < 2 ? (
         <section className="rounded-2xl bg-card p-6 ring-1 ring-foreground/10">
           <h2 className="font-heading text-2xl">No signaling groups yet</h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             {data.mode === "live"
-              ? "A successful poll will list every SIP signaling group on the SBC. If the watch filter is set, only matching names and ids appear."
+              ? "A successful poll lists every SIP signaling group on each enabled SBC. If the watch filter is set, only matching names and ids appear."
               : "The demo set appears after the first poll. Use Poll now if this stays empty."}
           </p>
         </section>
       ) : (
-        <section className="grid gap-3">
-          {data.trunks.map((trunk) => (
-            <TrunkCard
-              key={trunk.id}
-              trunk={trunk}
-              now={now}
-              demo={data.mode === "demo"}
-              pending={pending !== ""}
-              onToggle={() =>
-                void act(
-                  "/api/demo",
-                  { action: trunk.simulated ? "restore" : "down", trunkId: trunk.id },
-                  trunk.id,
-                  trunk.simulated ? `${trunk.name} restored` : `${trunk.name} marked down`,
-                )
-              }
-            />
+        <div className="grid gap-6">
+          <p className="text-sm text-muted-foreground">Select a trunk to see peers, channels, and call counters.</p>
+          {groups.map((group) => (
+            <section key={group.sbc.id} className="grid gap-3">
+              {groups.length > 1 ? (
+                <div>
+                  <h2 className="font-heading text-2xl">{group.sbc.nodeName || group.sbc.name || group.sbc.host || "SBC"}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {[group.sbc.host, group.sbc.softwareVersion].filter(Boolean).join(" · ") || "Waiting for a poll"}
+                    {group.sbc.lastError ? <span className="text-down"> · {group.sbc.lastError}</span> : null}
+                  </p>
+                </div>
+              ) : null}
+              {group.trunks.length === 0 ? (
+                <p className="rounded-2xl bg-card px-4 py-5 text-sm text-muted-foreground ring-1 ring-foreground/10">
+                  No signaling groups from this SBC yet.
+                </p>
+              ) : (
+                group.trunks.map((trunk) => (
+                  <TrunkCard
+                    key={trunk.id}
+                    trunk={trunk}
+                    now={now}
+                    open={Boolean(expanded[trunk.id])}
+                    demo={data.mode === "demo"}
+                    pending={pending !== ""}
+                    onOpen={() => setExpanded((current) => ({ ...current, [trunk.id]: !current[trunk.id] }))}
+                    onToggle={() =>
+                      void act(
+                        "/api/demo",
+                        { action: trunk.simulated ? "restore" : "down", trunkId: trunk.sgId || trunk.id },
+                        trunk.id,
+                        trunk.simulated ? `${trunk.name} restored` : `${trunk.name} marked down`,
+                      )
+                    }
+                  />
+                ))
+              )}
+            </section>
           ))}
-        </section>
+        </div>
       )}
 
       <section>
@@ -267,58 +298,99 @@ function Stat({ label, value, className }: { label: string; value: number; class
   );
 }
 
+function trunkGroups(data: Dashboard): { sbc: DashboardSbc; trunks: TrunkView[] }[] {
+  const source = data.mode === "demo" ? data.sbcs : data.sbcs.filter((sbc) => sbc.enabled);
+  if (source.length === 0) {
+    if (data.trunks.length === 0) return [];
+    return [
+      {
+        sbc: {
+          id: "trunks",
+          name: "",
+          host: "",
+          enabled: true,
+          nodeName: "",
+          softwareVersion: "",
+          lastError: null,
+          consecutiveFailures: 0,
+        },
+        trunks: data.trunks,
+      },
+    ];
+  }
+  return source.map((sbc) => ({
+    sbc,
+    trunks: data.trunks.filter((trunk) => trunk.sbcId === sbc.id),
+  }));
+}
+
 function TrunkCard({
   trunk,
   now,
+  open,
   demo,
   pending,
+  onOpen,
   onToggle,
 }: {
   trunk: TrunkView;
   now: number;
+  open: boolean;
   demo: boolean;
   pending: boolean;
+  onOpen: () => void;
   onToggle: () => void;
 }) {
   const used = trunk.channels && trunk.currentCalls != null ? Math.min(100, (trunk.currentCalls / trunk.channels) * 100) : null;
+  const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
   return (
-    <article className={`rounded-2xl border-l-4 bg-card p-4 ring-1 ring-foreground/10 ${borderTone(trunk.health)}`}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone(trunk.health)}`}>{trunk.statusLabel}</span>
-            <span className="text-xs text-muted-foreground">SG {trunk.id}</span>
-            {trunk.simulated ? <span className="text-xs text-primary">Simulated</span> : null}
+    <article className={`rounded-2xl border-l-4 bg-card ring-1 ring-foreground/10 ${borderTone(trunk.health)}`}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        aria-expanded={open}
+        onClick={onOpen}
+      >
+        <Chevron className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone(trunk.health)}`}>{trunk.statusLabel}</span>
+        <span className="min-w-0 flex-1 truncate font-heading text-xl">{trunk.name}</span>
+        {trunk.simulated ? <span className="text-xs text-primary">Simulated</span> : null}
+      </button>
+      {open ? (
+        <div className="px-4 pb-4">
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">SG {trunk.sgId || trunk.id}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {trunk.peers.join(" · ") || "No SIP server table"}
+                {trunk.protocol ? ` · ${trunk.protocol}` : ""}
+                {trunk.interop ? ` · ${trunk.interop}` : ""}
+              </p>
+            </div>
+            <div className="text-sm sm:text-right">
+              <p>
+                <span className="font-medium">{trunk.currentCalls ?? "—"}</span>
+                <span className="text-muted-foreground"> active / {trunk.channels ?? "—"} channels</span>
+              </p>
+              <p className="text-muted-foreground capitalize">Admin {trunk.adminState}</p>
+              {trunk.downSince && (trunk.health === "down" || trunk.health === "degraded") ? (
+                <p className="text-down">Down since {formatAgo(trunk.downSince, now)}</p>
+              ) : null}
+              {demo && trunk.adminState !== "disabled" ? (
+                <Button variant="outline" size="sm" className="mt-2" disabled={pending} onClick={onToggle}>
+                  {trunk.simulated ? "Restore" : "Mark down"}
+                </Button>
+              ) : null}
+            </div>
           </div>
-          <h2 className="mt-1 truncate font-heading text-2xl">{trunk.name}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {trunk.peers.join(" · ") || "No SIP server table"}
-            {trunk.protocol ? ` · ${trunk.protocol}` : ""}
-            {trunk.interop ? ` · ${trunk.interop}` : ""}
-          </p>
-        </div>
-        <div className="text-sm sm:text-right">
-          <p>
-            <span className="font-medium">{trunk.currentCalls ?? "—"}</span>
-            <span className="text-muted-foreground"> active / {trunk.channels ?? "—"} channels</span>
-          </p>
-          <p className="text-muted-foreground capitalize">Admin {trunk.adminState}</p>
-          {trunk.downSince && (trunk.health === "down" || trunk.health === "degraded") ? (
-            <p className="text-down">Down since {formatAgo(trunk.downSince, now)}</p>
+          {used != null ? (
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-primary" style={{ width: `${used}%` }} />
+            </div>
           ) : null}
-          {demo && trunk.adminState !== "disabled" ? (
-            <Button variant="outline" size="sm" className="mt-2" disabled={pending} onClick={onToggle}>
-              {trunk.simulated ? "Restore" : "Mark down"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {used != null ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-          <div className="h-full bg-primary" style={{ width: `${used}%` }} />
+          {hasCallStats(trunk.calls) ? <CallMetrics calls={trunk.calls} /> : null}
         </div>
       ) : null}
-      {hasCallStats(trunk.calls) ? <CallMetrics calls={trunk.calls} /> : null}
     </article>
   );
 }

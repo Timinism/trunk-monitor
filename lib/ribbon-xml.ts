@@ -200,6 +200,10 @@ export function parseSignalingGroups(xml: string): ParsedSignalingGroup[] {
     const description = field(node, "Description");
     groups.push({
       id,
+      sbcId: "",
+      sbcName: "",
+      sbcHost: "",
+      sgId: id,
       name: description || `Signaling group ${id}`,
       health,
       rawStatus: stub ? "unknown" : rawStatus,

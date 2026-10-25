@@ -201,7 +201,7 @@ export function evaluateAlarms(
 }
 
 export function matchesWatchFilter(
-  trunk: { id: string; name: string },
+  trunk: { id: string; name: string; sgId?: string },
   filter: string,
 ): boolean {
   const tokens = filter
@@ -210,6 +210,7 @@ export function matchesWatchFilter(
     .filter(Boolean);
   if (tokens.length === 0) return true;
   const id = trunk.id.toLowerCase();
+  const sgId = (trunk.sgId ?? "").toLowerCase();
   const name = trunk.name.toLowerCase();
-  return tokens.some((token) => id === token || name.includes(token));
+  return tokens.some((token) => id === token || sgId === token || name.includes(token));
 }

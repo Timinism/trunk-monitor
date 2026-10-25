@@ -106,6 +106,10 @@ export class RibbonClient {
       .filter((group) => !group.stub)
       .map((group) => ({
         id: group.id,
+        sbcId: group.sbcId,
+        sbcName: group.sbcName,
+        sbcHost: group.sbcHost,
+        sgId: group.sgId || group.id,
         name: group.name,
         health: group.health,
         rawStatus: group.rawStatus,

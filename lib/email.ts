@@ -49,7 +49,7 @@ export function renderTrunkMail(input: {
   const lines = [
     headline(input.kind, input.trunk.name),
     "",
-    `Signaling group: ${input.trunk.name} (id ${input.trunk.id})`,
+    `Signaling group: ${input.trunk.name} (id ${input.trunk.sgId || input.trunk.id})`,
     `State: ${input.trunk.statusLabel} (${input.trunk.rawStatus})`,
     `Previous: ${input.previousHealth ?? "first observation"}`,
     `SBC: ${sbc}${input.sbcHost ? ` (${input.sbcHost})` : ""}`,
@@ -102,7 +102,7 @@ export function renderTestMail(settings: Settings, now = new Date()): { subject:
   const lines = [
     "This is a test message from Edge Watch.",
     "",
-    `SBC: ${settings.sbcHost || "not configured"}`,
+    `SBC: ${settings.sbcs.map((sbc) => sbc.name.trim() || sbc.host).filter(Boolean).join(", ") || settings.sbcHost || "not configured"}`,
     `Mode: ${settings.mode}`,
     `Time: ${formatStamp(now, settings.timezone)}`,
     "",
