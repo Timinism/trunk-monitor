@@ -17,14 +17,16 @@ A failed poll does not mark every trunk down. After several failures Edge Watch 
 
 ## Install with Node.js
 
-Install [Node.js 22](https://nodejs.org/) or newer, then from this folder:
+Install [Node.js 22](https://nodejs.org/) or newer. Clone the repo if you have not already, then run the install from that directory. `npm install` in your home folder fails because `package.json` is not there.
 
 ```bash
+origin repo clone ttec/trunk-monitor
+cd trunk-monitor
 npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:3847. The same two commands work in PowerShell, Command Prompt, and WSL. With no SBC configured, the app starts in demo mode so you can simulate an outage and read the alert.
+Open http://127.0.0.1:3847. With no SBC configured, the app starts in demo mode so you can simulate an outage and read the alert. If `trunk-monitor` already exists, skip the clone and start with `cd trunk-monitor`.
 
 For a long-running process:
 
@@ -61,7 +63,7 @@ SMTP_PORT=587
 SMTP_FROM=Edge Watch <noc@example.com>
 ```
 
-On macOS, Linux, or WSL, use `cp .env.example .env`. Those variables are read only while `./data` is still empty. After that, Settings in the UI is what the monitor keeps.
+Those variables are read only while `./data` is still empty. After that, Settings in the UI is what the monitor keeps.
 
 The REST account has to be created in the SBC Web UI with the **REST** access level before login will succeed. Most appliances ship a self-signed certificate, so TLS verification stays off unless `SBC_TLS_VERIFY=true`.
 
