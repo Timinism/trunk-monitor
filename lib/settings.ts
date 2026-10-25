@@ -3,10 +3,38 @@ import type { PublicSettings, Settings } from "./types";
 
 export const DEFAULT_TIMEZONE = "America/Chicago";
 
+function codeDefaults(): Settings {
+  return {
+    mode: "demo",
+    monitoringEnabled: true,
+    sbcHost: "",
+    sbcPort: 443,
+    sbcUsername: "",
+    sbcPassword: "",
+    tlsVerify: false,
+    pollIntervalSeconds: 60,
+    watchFilter: "",
+    alertRecipients: "",
+    alertOnRecovery: true,
+    alertOnDegraded: false,
+    alertOnStartup: false,
+    reminderMinutes: 0,
+    unreachableThreshold: 3,
+    smtpHost: "",
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: "",
+    smtpPassword: "",
+    alertFrom: "Edge Watch <edge-watch@localhost>",
+    timezone: DEFAULT_TIMEZONE,
+  };
+}
+
 export function defaultSettings(): Settings {
   const host = process.env.SBC_HOST?.trim() ?? "";
   const smtpPort = numberFromEnv("SMTP_PORT", 587);
   return {
+    ...codeDefaults(),
     mode: host ? "live" : "demo",
     monitoringEnabled: process.env.MONITORING_ENABLED !== "false",
     sbcHost: host,
@@ -50,14 +78,9 @@ export function getSettings(): Settings {
     writeJson("settings", seeded);
     return seeded;
   }
-  return normalizeSettings({ ...defaultSettings(), ...stored, ...secretsFrom(stored) });
-}
-
-function secretsFrom(stored: Partial<Settings>): Partial<Settings> {
-  return {
-    sbcPassword: typeof stored.sbcPassword === "string" ? stored.sbcPassword : "",
-    smtpPassword: typeof stored.smtpPassword === "string" ? stored.smtpPassword : "",
-  };
+  // After the first launch, Settings in the web UI is the source of truth.
+  // A later change to SBC_HOST or the other environment variables does not replace it.
+  return normalizeSettings({ ...codeDefaults(), ...stored });
 }
 
 export function saveSettings(settings: Settings) {
@@ -170,10 +193,20 @@ export function mergeSettings(current: Settings, input: unknown): Settings {
   if (typeof body.sbcPassword === "string" && body.sbcPassword.length > 0) {
     if (body.sbcPassword.length > 256) throw new Error("SBC password is too long.");
     next.sbcPassword = body.sbcPassword;
+  } else if (body.clearSbcPassword === true) {
+    next.sbcPassword = "";
   }
   if (typeof body.smtpPassword === "string" && body.smtpPassword.length > 0) {
     if (body.smtpPassword.length > 256) throw new Error("SMTP password is too long.");
     next.smtpPassword = body.smtpPassword;
+  } else if (body.clearSmtpPassword === true) {
+    next.smtpPassword = "";
+  }
+
+  if (next.mode === "live") {
+    if (!next.sbcHost.trim()) throw new Error("Enter the SBC address.");
+    if (!next.sbcUsername.trim()) throw new Error("Enter the REST username.");
+    if (!next.sbcPassword) throw new Error("Enter the REST password.");
   }
 
   return normalizeSettings(next);

@@ -40,7 +40,7 @@ const empty: FormState = {
   timezone: "America/Chicago",
 };
 
-function payload(form: FormState) {
+function payload(form: FormState, clearSbcPassword: boolean, clearSmtpPassword: boolean) {
   return {
     ...form,
     sbcPort: Number(form.sbcPort),
@@ -48,6 +48,8 @@ function payload(form: FormState) {
     pollIntervalSeconds: Number(form.pollIntervalSeconds),
     reminderMinutes: Number(form.reminderMinutes),
     unreachableThreshold: Number(form.unreachableThreshold),
+    clearSbcPassword,
+    clearSmtpPassword,
   };
 }
 
@@ -56,6 +58,8 @@ export function SettingsForm() {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState("");
   const [note, setNote] = useState("");
+  const [clearSbcPassword, setClearSbcPassword] = useState(false);
+  const [clearSmtpPassword, setClearSmtpPassword] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -72,6 +76,8 @@ export function SettingsForm() {
         }
         const settings = (await response.json()) as PublicSettings;
         setForm({ ...empty, ...settings, sbcPassword: "", smtpPassword: "" });
+        setClearSbcPassword(false);
+        setClearSmtpPassword(false);
         setLoading(false);
       })();
     }, 0);
@@ -89,7 +95,7 @@ export function SettingsForm() {
     const response = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload(form)),
+      body: JSON.stringify(payload(form, clearSbcPassword, clearSmtpPassword)),
     });
     setPending("");
     const body = (await response.json().catch(() => null)) as { error?: string; settings?: PublicSettings } | null;
@@ -100,7 +106,9 @@ export function SettingsForm() {
       return;
     }
     if (body?.settings) setForm({ ...empty, ...body.settings, sbcPassword: "", smtpPassword: "" });
-    setNote("Saved. A poll ran with the new settings.");
+    setClearSbcPassword(false);
+    setClearSmtpPassword(false);
+    setNote("Saved. The SBC address, username, and password in this form are what the monitor uses.");
     toast.success("Settings saved");
   }
 
@@ -110,7 +118,7 @@ export function SettingsForm() {
     const response = await fetch("/api/sbc/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload(form)),
+      body: JSON.stringify(payload(form, clearSbcPassword, clearSmtpPassword)),
     });
     const body = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
     setPending("");
@@ -126,7 +134,7 @@ export function SettingsForm() {
     const response = await fetch("/api/email/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload(form)),
+      body: JSON.stringify(payload(form, clearSbcPassword, clearSmtpPassword)),
     });
     const body = (await response.json().catch(() => null)) as { detail?: string; error?: string; status?: string } | null;
     setPending("");
@@ -143,12 +151,22 @@ export function SettingsForm() {
       <div>
         <h1 className="font-heading text-4xl tracking-tight">Settings</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Edge Watch logs into the SBC Edge REST API and reads SIP signaling groups. On that platform, the signaling group runtime status is the trunk up/down state. The REST user is created in the SBC Web UI and needs the REST access level.
+          Change the SBC address, REST username, REST password, and mail delivery here. Save stores them in this app. A `.env` file is only a first-launch seed.
         </p>
       </div>
 
       <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
-        <h2 className="font-heading text-2xl">Monitoring</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-heading text-2xl">SBC connection</h2>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              Choose Live SBC, then enter the address, username, and password. The REST account is created in the SBC Web UI and needs the REST access level.
+            </p>
+          </div>
+          <Button type="button" variant="outline" disabled={pending !== ""} onClick={() => void testSbc()}>
+            {pending === "sbc" ? "Testing…" : "Test connection"}
+          </Button>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant={form.mode === "demo" ? "default" : "outline"} onClick={() => patch({ mode: "demo" })}>
             Demo
@@ -157,6 +175,44 @@ export function SettingsForm() {
             Live SBC
           </Button>
         </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="SBC address" hint="Hostname or IP. https:// is optional.">
+            <Input
+              value={form.sbcHost}
+              onChange={(event) => patch({ sbcHost: event.target.value })}
+              placeholder="sbc.example.com"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </Field>
+          <Field label="HTTPS port">
+            <Input type="number" min={1} max={65535} value={form.sbcPort} onChange={(event) => patch({ sbcPort: Number(event.target.value) })} />
+          </Field>
+          <Field label="REST username">
+            <Input value={form.sbcUsername} onChange={(event) => patch({ sbcUsername: event.target.value })} autoComplete="off" spellCheck={false} />
+          </Field>
+          <Field label="REST password" hint={form.sbcPasswordSet ? "A password is saved. Type a new one to replace it, or leave this blank to keep it." : "Required for a live SBC."}>
+            <Input type="password" value={form.sbcPassword} onChange={(event) => patch({ sbcPassword: event.target.value })} autoComplete="new-password" />
+          </Field>
+        </div>
+        {form.sbcPasswordSet ? (
+          <Toggle
+            label="Remove saved REST password"
+            hint="Forgets the password already stored. A new password typed above is kept instead."
+            checked={clearSbcPassword}
+            onChange={setClearSbcPassword}
+          />
+        ) : null}
+        <Toggle
+          label="Verify TLS certificate"
+          hint="Leave this off for the self-signed certificate that ships on most SBC Edge appliances."
+          checked={form.tlsVerify}
+          onChange={(tlsVerify) => patch({ tlsVerify })}
+        />
+      </section>
+
+      <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
+        <h2 className="font-heading text-2xl">Monitoring</h2>
         <Toggle
           label="Scheduled polling"
           hint="While this is off, the background poller waits. Poll now on the trunk page still runs a check."
@@ -175,35 +231,6 @@ export function SettingsForm() {
         <Field label="Watch filter" hint="Blank monitors every SIP signaling group. Otherwise comma-separated names or ids.">
           <Input value={form.watchFilter} onChange={(event) => patch({ watchFilter: event.target.value })} placeholder="Lumen, Teams, 3" />
         </Field>
-      </section>
-
-      <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <h2 className="font-heading text-2xl">SBC connection</h2>
-          <Button type="button" variant="outline" disabled={pending !== ""} onClick={() => void testSbc()}>
-            {pending === "sbc" ? "Testing…" : "Test connection"}
-          </Button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Host" hint="Hostname or IP. https:// is optional.">
-            <Input value={form.sbcHost} onChange={(event) => patch({ sbcHost: event.target.value })} placeholder="sbc.example.com" />
-          </Field>
-          <Field label="HTTPS port">
-            <Input type="number" min={1} max={65535} value={form.sbcPort} onChange={(event) => patch({ sbcPort: Number(event.target.value) })} />
-          </Field>
-          <Field label="REST username">
-            <Input value={form.sbcUsername} onChange={(event) => patch({ sbcUsername: event.target.value })} autoComplete="off" />
-          </Field>
-          <Field label="REST password" hint={form.sbcPasswordSet ? "A password is saved. Leave this blank to keep it." : "Required for a live SBC."}>
-            <Input type="password" value={form.sbcPassword} onChange={(event) => patch({ sbcPassword: event.target.value })} autoComplete="new-password" />
-          </Field>
-        </div>
-        <Toggle
-          label="Verify TLS certificate"
-          hint="Leave this off for the self-signed certificate that ships on most SBC Edge appliances."
-          checked={form.tlsVerify}
-          onChange={(tlsVerify) => patch({ tlsVerify })}
-        />
       </section>
 
       <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
@@ -265,10 +292,18 @@ export function SettingsForm() {
           <Field label="SMTP username">
             <Input value={form.smtpUser} onChange={(event) => patch({ smtpUser: event.target.value })} autoComplete="off" />
           </Field>
-          <Field label="SMTP password" hint={form.smtpPasswordSet ? "A password is saved. Leave this blank to keep it." : "Leave blank for an open relay."}>
+          <Field label="SMTP password" hint={form.smtpPasswordSet ? "A password is saved. Type a new one to replace it, or leave this blank to keep it." : "Leave blank for an open relay."}>
             <Input type="password" value={form.smtpPassword} onChange={(event) => patch({ smtpPassword: event.target.value })} autoComplete="new-password" />
           </Field>
         </div>
+        {form.smtpPasswordSet ? (
+          <Toggle
+            label="Remove saved SMTP password"
+            hint="Forgets the password already stored. A new password typed above is kept instead."
+            checked={clearSmtpPassword}
+            onChange={setClearSmtpPassword}
+          />
+        ) : null}
         <Field label="From">
           <Input value={form.alertFrom} onChange={(event) => patch({ alertFrom: event.target.value })} />
         </Field>

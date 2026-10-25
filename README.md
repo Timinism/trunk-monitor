@@ -39,7 +39,9 @@ npm start
 
 ### Connect a live SBC
 
-You can enter the SBC and SMTP settings in the web UI. To seed them on the first launch instead, copy the example file and edit it before starting the app.
+Open Settings in the web UI. Choose **Live SBC**, then enter the SBC address, HTTPS port, REST username, and REST password. Save and poll stores them in this app and checks the trunk on the next poll. SMTP recipients, host, username, and password are on that same page.
+
+A `.env` file can seed those values only while `./data` is still empty. After that, the Settings page is what the monitor uses, including when the environment variables still hold the old address or password. To seed the first launch instead of typing into the page, copy the example file and edit it before starting the app.
 
 PowerShell:
 
@@ -62,8 +64,6 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_FROM=Edge Watch <noc@example.com>
 ```
-
-Those variables are read only while `./data` is still empty. After that, Settings in the UI is what the monitor keeps.
 
 The REST account has to be created in the SBC Web UI with the **REST** access level before login will succeed. Most appliances ship a self-signed certificate, so TLS verification stays off unless `SBC_TLS_VERIFY=true`.
 
