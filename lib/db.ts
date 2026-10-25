@@ -1,0 +1,295 @@
+import fs from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import type { AdminState, AlertEvent, EmailStatus, EventKind, Health, MonitorMode } from "./types";
+
+export type StoredTrunk = {
+  id: string;
+  name: string;
+  health: Health;
+  alarmHealth: Health;
+  alarming: boolean;
+  rawStatus: string;
+  statusLabel: string;
+  adminState: AdminState;
+  channels: number | null;
+  currentCalls: number | null;
+  peers: string[];
+  interop: string;
+  protocol: string;
+  downSince: string | null;
+  lastAlertAt: string | null;
+  simulated: boolean;
+  updatedAt: string;
+};
+
+export type PollState = {
+  lastPollAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+  unreachableAlertedAt: string | null;
+  sbcName: string;
+  softwareVersion: string;
+  snapshotMode: MonitorMode | null;
+};
+
+const EMPTY_POLL: PollState = {
+  lastPollAt: null,
+  lastSuccessAt: null,
+  lastError: null,
+  consecutiveFailures: 0,
+  unreachableAlertedAt: null,
+  sbcName: "",
+  softwareVersion: "",
+  snapshotMode: null,
+};
+
+let database: DatabaseSync | null = null;
+
+export function dataDirectory(): string {
+  return process.env.DATA_DIR?.trim() || path.join(process.cwd(), "data");
+}
+
+function openDatabase(): DatabaseSync {
+  const directory = dataDirectory();
+  fs.mkdirSync(directory, { recursive: true });
+  const db = new DatabaseSync(path.join(directory, "edge-watch.sqlite"));
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS kv (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS trunk_state (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      health TEXT NOT NULL,
+      alarm_health TEXT NOT NULL,
+      alarming INTEGER NOT NULL,
+      raw_status TEXT NOT NULL,
+      status_label TEXT NOT NULL,
+      admin_state TEXT NOT NULL,
+      channels INTEGER,
+      current_calls INTEGER,
+      peers TEXT NOT NULL,
+      interop TEXT NOT NULL,
+      protocol TEXT NOT NULL,
+      down_since TEXT,
+      last_alert_at TEXT,
+      simulated INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      trunk_id TEXT,
+      trunk_name TEXT,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      email_status TEXT NOT NULL,
+      email_detail TEXT NOT NULL DEFAULT ''
+    );
+  `);
+  return db;
+}
+
+export function getDb(): DatabaseSync {
+  if (!database) database = openDatabase();
+  return database;
+}
+
+export function closeDb(): void {
+  database?.close();
+  database = null;
+}
+
+function kvGet(key: string): string | null {
+  const row = getDb().prepare("SELECT value FROM kv WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+function kvSet(key: string, value: string) {
+  getDb()
+    .prepare(
+      `INSERT INTO kv (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+    .run(key, value);
+}
+
+export function readJson<T>(key: string): T | null {
+  const raw = kvGet(key);
+  if (!raw) return null;
+  return JSON.parse(raw) as T;
+}
+
+export function writeJson(key: string, value: unknown) {
+  kvSet(key, JSON.stringify(value));
+}
+
+export function getPollState(): PollState {
+  return { ...EMPTY_POLL, ...(readJson<Partial<PollState>>("poll_state") ?? {}) };
+}
+
+export function savePollState(state: PollState) {
+  writeJson("poll_state", state);
+}
+
+export function getDemoDownIds(): string[] {
+  return readJson<string[]>("demo_down_ids") ?? [];
+}
+
+export function setDemoDownIds(ids: string[]) {
+  writeJson("demo_down_ids", [...new Set(ids)]);
+}
+
+type TrunkRow = {
+  id: string;
+  name: string;
+  health: Health;
+  alarm_health: Health;
+  alarming: number;
+  raw_status: string;
+  status_label: string;
+  admin_state: AdminState;
+  channels: number | null;
+  current_calls: number | null;
+  peers: string;
+  interop: string;
+  protocol: string;
+  down_since: string | null;
+  last_alert_at: string | null;
+  simulated: number;
+  updated_at: string;
+};
+
+function trunkFromRow(row: TrunkRow): StoredTrunk {
+  return {
+    id: row.id,
+    name: row.name,
+    health: row.health,
+    alarmHealth: row.alarm_health,
+    alarming: row.alarming === 1,
+    rawStatus: row.raw_status,
+    statusLabel: row.status_label,
+    adminState: row.admin_state,
+    channels: row.channels,
+    currentCalls: row.current_calls,
+    peers: JSON.parse(row.peers) as string[],
+    interop: row.interop,
+    protocol: row.protocol,
+    downSince: row.down_since,
+    lastAlertAt: row.last_alert_at,
+    simulated: row.simulated === 1,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function listTrunks(): StoredTrunk[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM trunk_state ORDER BY CAST(id AS INTEGER), id")
+    .all() as unknown as TrunkRow[];
+  return rows.map(trunkFromRow);
+}
+
+export function replaceTrunks(trunks: StoredTrunk[]) {
+  const db = getDb();
+  const insert = db.prepare(`
+    INSERT INTO trunk_state (
+      id, name, health, alarm_health, alarming, raw_status, status_label, admin_state,
+      channels, current_calls, peers, interop, protocol, down_since, last_alert_at,
+      simulated, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  db.exec("BEGIN");
+  try {
+    db.exec("DELETE FROM trunk_state");
+    for (const trunk of trunks) {
+      insert.run(
+        trunk.id,
+        trunk.name,
+        trunk.health,
+        trunk.alarmHealth,
+        trunk.alarming ? 1 : 0,
+        trunk.rawStatus,
+        trunk.statusLabel,
+        trunk.adminState,
+        trunk.channels,
+        trunk.currentCalls,
+        JSON.stringify(trunk.peers),
+        trunk.interop,
+        trunk.protocol,
+        trunk.downSince,
+        trunk.lastAlertAt,
+        trunk.simulated ? 1 : 0,
+        trunk.updatedAt,
+      );
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export function insertEvent(event: Omit<AlertEvent, "id">): AlertEvent {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO events (
+        created_at, kind, trunk_id, trunk_name, subject, body, email_status, email_detail
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      event.createdAt,
+      event.kind,
+      event.trunkId,
+      event.trunkName,
+      event.subject,
+      event.body,
+      event.emailStatus,
+      event.emailDetail,
+    );
+  getDb()
+    .prepare(
+      `DELETE FROM events WHERE id NOT IN (
+        SELECT id FROM events ORDER BY id DESC LIMIT 1000
+      )`,
+    )
+    .run();
+  return { ...event, id: Number(result.lastInsertRowid) };
+}
+
+type EventRow = {
+  id: number;
+  created_at: string;
+  kind: EventKind;
+  trunk_id: string | null;
+  trunk_name: string | null;
+  subject: string;
+  body: string;
+  email_status: EmailStatus;
+  email_detail: string;
+};
+
+function eventFromRow(row: EventRow): AlertEvent {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    kind: row.kind,
+    trunkId: row.trunk_id,
+    trunkName: row.trunk_name,
+    subject: row.subject,
+    body: row.body,
+    emailStatus: row.email_status,
+    emailDetail: row.email_detail,
+  };
+}
+
+export function listEvents(limit = 100): AlertEvent[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM events ORDER BY id DESC LIMIT ?")
+    .all(limit) as unknown as EventRow[];
+  return rows.map(eventFromRow);
+}

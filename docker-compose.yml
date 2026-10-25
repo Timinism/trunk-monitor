@@ -1,0 +1,42 @@
+services:
+  edge-watch:
+    build: .
+    ports:
+      - "3847:3847"
+    environment:
+      DATA_DIR: /data
+      ALERT_TIMEZONE: ${ALERT_TIMEZONE:-America/Chicago}
+      SBC_HOST: ${SBC_HOST:-}
+      SBC_PORT: ${SBC_PORT:-443}
+      SBC_USERNAME: ${SBC_USERNAME:-}
+      SBC_PASSWORD: ${SBC_PASSWORD:-}
+      SBC_TLS_VERIFY: ${SBC_TLS_VERIFY:-false}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      WATCH_FILTER: ${WATCH_FILTER:-}
+      ALERT_TO: ${ALERT_TO:-}
+      ALERT_ON_RECOVERY: ${ALERT_ON_RECOVERY:-true}
+      ALERT_ON_DEGRADED: ${ALERT_ON_DEGRADED:-false}
+      ALERT_ON_STARTUP: ${ALERT_ON_STARTUP:-false}
+      ALERT_REMINDER_MINUTES: ${ALERT_REMINDER_MINUTES:-0}
+      UNREACHABLE_THRESHOLD: ${UNREACHABLE_THRESHOLD:-3}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Edge Watch <edge-watch@localhost>}
+      MONITOR_PASSWORD: ${MONITOR_PASSWORD:-}
+      MONITOR_COOKIE_SECURE: ${MONITOR_COOKIE_SECURE:-false}
+    volumes:
+      - edge-watch-data:/data
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit
+    profiles: ["mail"]
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  edge-watch-data:

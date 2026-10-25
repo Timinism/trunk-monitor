@@ -1,0 +1,323 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import type { PublicSettings } from "@/lib/types";
+
+type FormState = PublicSettings & {
+  sbcPassword: string;
+  smtpPassword: string;
+};
+
+const empty: FormState = {
+  mode: "demo",
+  monitoringEnabled: true,
+  sbcHost: "",
+  sbcPort: 443,
+  sbcUsername: "",
+  sbcPassword: "",
+  sbcPasswordSet: false,
+  tlsVerify: false,
+  pollIntervalSeconds: 60,
+  watchFilter: "",
+  alertRecipients: "",
+  alertOnRecovery: true,
+  alertOnDegraded: false,
+  alertOnStartup: false,
+  reminderMinutes: 0,
+  unreachableThreshold: 3,
+  smtpHost: "",
+  smtpPort: 587,
+  smtpSecure: false,
+  smtpUser: "",
+  smtpPassword: "",
+  smtpPasswordSet: false,
+  alertFrom: "Edge Watch <edge-watch@localhost>",
+  timezone: "America/Chicago",
+};
+
+function payload(form: FormState) {
+  return {
+    ...form,
+    sbcPort: Number(form.sbcPort),
+    smtpPort: Number(form.smtpPort),
+    pollIntervalSeconds: Number(form.pollIntervalSeconds),
+    reminderMinutes: Number(form.reminderMinutes),
+    unreachableThreshold: Number(form.unreachableThreshold),
+  };
+}
+
+export function SettingsForm() {
+  const [form, setForm] = useState<FormState>(empty);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState("");
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        if (response.status === 401) {
+          window.location.reload();
+          return;
+        }
+        if (!response.ok) {
+          setNote("Settings could not be loaded.");
+          setLoading(false);
+          return;
+        }
+        const settings = (await response.json()) as PublicSettings;
+        setForm({ ...empty, ...settings, sbcPassword: "", smtpPassword: "" });
+        setLoading(false);
+      })();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function patch(partial: Partial<FormState>) {
+    setForm((current) => ({ ...current, ...partial }));
+  }
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setPending("save");
+    setNote("");
+    const response = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload(form)),
+    });
+    setPending("");
+    const body = (await response.json().catch(() => null)) as { error?: string; settings?: PublicSettings } | null;
+    if (!response.ok) {
+      const message = body?.error ?? "Could not save settings.";
+      setNote(message);
+      toast.error(message);
+      return;
+    }
+    if (body?.settings) setForm({ ...empty, ...body.settings, sbcPassword: "", smtpPassword: "" });
+    setNote("Saved. A poll ran with the new settings.");
+    toast.success("Settings saved");
+  }
+
+  async function testSbc() {
+    setPending("sbc");
+    setNote("");
+    const response = await fetch("/api/sbc/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload(form)),
+    });
+    const body = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
+    setPending("");
+    const message = body?.message ?? body?.error ?? "Connection test failed.";
+    setNote(message);
+    if (response.ok) toast.success(message);
+    else toast.error(message);
+  }
+
+  async function testEmail() {
+    setPending("email");
+    setNote("");
+    const response = await fetch("/api/email/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload(form)),
+    });
+    const body = (await response.json().catch(() => null)) as { detail?: string; error?: string; status?: string } | null;
+    setPending("");
+    const message = body?.detail ?? body?.error ?? "Test email failed.";
+    setNote(message);
+    if (body?.status === "sent") toast.success(message);
+    else toast.error(message);
+  }
+
+  if (loading) return <div className="h-64 animate-pulse rounded-2xl bg-card" />;
+
+  return (
+    <form onSubmit={save} className="grid gap-5">
+      <div>
+        <h1 className="font-heading text-4xl tracking-tight">Settings</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Edge Watch logs into the SBC Edge REST API and reads SIP signaling groups. On that platform, the signaling group runtime status is the trunk up/down state. The REST user is created in the SBC Web UI and needs the REST access level.
+        </p>
+      </div>
+
+      <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
+        <h2 className="font-heading text-2xl">Monitoring</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant={form.mode === "demo" ? "default" : "outline"} onClick={() => patch({ mode: "demo" })}>
+            Demo
+          </Button>
+          <Button type="button" variant={form.mode === "live" ? "default" : "outline"} onClick={() => patch({ mode: "live" })}>
+            Live SBC
+          </Button>
+        </div>
+        <Toggle
+          label="Scheduled polling"
+          hint="While this is off, the background poller waits. Poll now on the trunk page still runs a check."
+          checked={form.monitoringEnabled}
+          onChange={(monitoringEnabled) => patch({ monitoringEnabled })}
+        />
+        <Field label="Poll interval (seconds)" hint="15 to 3600. The SBC session expires after 10 minutes idle, so keep this under that.">
+          <Input
+            type="number"
+            min={15}
+            max={3600}
+            value={form.pollIntervalSeconds}
+            onChange={(event) => patch({ pollIntervalSeconds: Number(event.target.value) })}
+          />
+        </Field>
+        <Field label="Watch filter" hint="Blank monitors every SIP signaling group. Otherwise comma-separated names or ids.">
+          <Input value={form.watchFilter} onChange={(event) => patch({ watchFilter: event.target.value })} placeholder="Lumen, Teams, 3" />
+        </Field>
+      </section>
+
+      <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <h2 className="font-heading text-2xl">SBC connection</h2>
+          <Button type="button" variant="outline" disabled={pending !== ""} onClick={() => void testSbc()}>
+            {pending === "sbc" ? "Testing…" : "Test connection"}
+          </Button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Host" hint="Hostname or IP. https:// is optional.">
+            <Input value={form.sbcHost} onChange={(event) => patch({ sbcHost: event.target.value })} placeholder="sbc.example.com" />
+          </Field>
+          <Field label="HTTPS port">
+            <Input type="number" min={1} max={65535} value={form.sbcPort} onChange={(event) => patch({ sbcPort: Number(event.target.value) })} />
+          </Field>
+          <Field label="REST username">
+            <Input value={form.sbcUsername} onChange={(event) => patch({ sbcUsername: event.target.value })} autoComplete="off" />
+          </Field>
+          <Field label="REST password" hint={form.sbcPasswordSet ? "A password is saved. Leave this blank to keep it." : "Required for a live SBC."}>
+            <Input type="password" value={form.sbcPassword} onChange={(event) => patch({ sbcPassword: event.target.value })} autoComplete="new-password" />
+          </Field>
+        </div>
+        <Toggle
+          label="Verify TLS certificate"
+          hint="Leave this off for the self-signed certificate that ships on most SBC Edge appliances."
+          checked={form.tlsVerify}
+          onChange={(tlsVerify) => patch({ tlsVerify })}
+        />
+      </section>
+
+      <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
+        <h2 className="font-heading text-2xl">When to email</h2>
+        <Toggle
+          label="Email when a trunk recovers"
+          hint="Sends a follow-up after the signaling group leaves the alarm state."
+          checked={form.alertOnRecovery}
+          onChange={(alertOnRecovery) => patch({ alertOnRecovery })}
+        />
+        <Toggle
+          label="Also alarm on draining and drained"
+          hint="Down and peers-down always alarm. Draining is a controlled state unless you turn this on."
+          checked={form.alertOnDegraded}
+          onChange={(alertOnDegraded) => patch({ alertOnDegraded })}
+        />
+        <Toggle
+          label="Alert if a trunk is already down at first sight"
+          hint="Off avoids a burst of mail when the monitor starts and the trunk was already down."
+          checked={form.alertOnStartup}
+          onChange={(alertOnStartup) => patch({ alertOnStartup })}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Repeat while down (minutes)" hint="0 sends a single message until recovery.">
+            <Input type="number" min={0} max={1440} value={form.reminderMinutes} onChange={(event) => patch({ reminderMinutes: Number(event.target.value) })} />
+          </Field>
+          <Field label="SBC unreachable after (polls)" hint="Mail when the SBC itself cannot be polled this many times in a row.">
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              value={form.unreachableThreshold}
+              onChange={(event) => patch({ unreachableThreshold: Number(event.target.value) })}
+            />
+          </Field>
+        </div>
+        <Field label="Alert timezone" hint="Used in the email body. Example: America/Chicago.">
+          <Input value={form.timezone} onChange={(event) => patch({ timezone: event.target.value })} />
+        </Field>
+      </section>
+
+      <section className="grid gap-4 rounded-2xl bg-card p-5 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <h2 className="font-heading text-2xl">Email</h2>
+          <Button type="button" variant="outline" disabled={pending !== ""} onClick={() => void testEmail()}>
+            {pending === "email" ? "Sending…" : "Send test email"}
+          </Button>
+        </div>
+        <Field label="Recipients" hint="Comma or line separated. Alerts are still recorded if this is empty.">
+          <Textarea value={form.alertRecipients} onChange={(event) => patch({ alertRecipients: event.target.value })} placeholder="noc@example.com" />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="SMTP host">
+            <Input value={form.smtpHost} onChange={(event) => patch({ smtpHost: event.target.value })} placeholder="smtp.example.com" />
+          </Field>
+          <Field label="SMTP port">
+            <Input type="number" min={1} max={65535} value={form.smtpPort} onChange={(event) => patch({ smtpPort: Number(event.target.value) })} />
+          </Field>
+          <Field label="SMTP username">
+            <Input value={form.smtpUser} onChange={(event) => patch({ smtpUser: event.target.value })} autoComplete="off" />
+          </Field>
+          <Field label="SMTP password" hint={form.smtpPasswordSet ? "A password is saved. Leave this blank to keep it." : "Leave blank for an open relay."}>
+            <Input type="password" value={form.smtpPassword} onChange={(event) => patch({ smtpPassword: event.target.value })} autoComplete="new-password" />
+          </Field>
+        </div>
+        <Field label="From">
+          <Input value={form.alertFrom} onChange={(event) => patch({ alertFrom: event.target.value })} />
+        </Field>
+        <Toggle
+          label="Implicit TLS (port 465)"
+          hint="Off uses STARTTLS when the server offers it, which is the usual setup for port 587."
+          checked={form.smtpSecure}
+          onChange={(smtpSecure) => patch({ smtpSecure })}
+        />
+      </section>
+
+      {note ? <p className="text-sm text-muted-foreground">{note}</p> : null}
+      <div className="sticky bottom-3">
+        <Button type="submit" size="lg" disabled={pending !== ""}>
+          {pending === "save" ? "Saving…" : "Save and poll"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-sm font-medium">{label}</span>
+      {children}
+      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+    </div>
+  );
+}
+
+function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-border px-3 py-3">
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">{hint}</div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
+}
