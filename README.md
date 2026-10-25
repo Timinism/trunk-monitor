@@ -35,7 +35,7 @@ npm run build
 npm start
 ```
 
-`npm start` includes the background poller. `npm test` covers the Ribbon XML parser, alarm transitions, a fake SBC, and the mail decision.
+`npm start` includes the background poller. `npm test` covers the Ribbon XML parser, alarm transitions, a fake SBC, the mail decision, and sign-in.
 
 ### Connect a live SBC
 
@@ -67,7 +67,33 @@ SMTP_FROM=Edge Watch <noc@example.com>
 
 The REST account has to be created in the SBC Web UI with the **REST** access level before login will succeed. Most appliances ship a self-signed certificate, so TLS verification stays off unless `SBC_TLS_VERIFY=true`.
 
-Set `MONITOR_PASSWORD` to require a password for the UI and API. The session cookie is not marked Secure unless `MONITOR_COOKIE_SECURE=true`, so the lock works over plain HTTP on a trusted network.
+## Sign in
+
+The UI and API stay closed until someone signs in. Health checks at `/api/health` stay open so a container probe can run without a session. Edge Watch is meant to stay on the internal network. Do not publish it to the internet.
+
+Two methods can be turned on together:
+
+- Local account. Set `MONITOR_PASSWORD`. The username defaults to `admin`, or `MONITOR_USERNAME`. Restarting with a new password updates that account. After eight wrong passwords for the same name, that name is locked for 15 minutes.
+- Microsoft Entra ID. Register a single-tenant app in Entra, then set the variables below. People in that directory can sign in. Set `OIDC_ALLOWED_GROUPS` to a comma-separated list of group object IDs or app role values when only some of them should get in.
+
+Entra app registration:
+
+1. Entra admin center, App registrations, New registration. Supported account types: this directory only.
+2. Redirect URI, platform Web: the exact browser URL plus `/api/session/oidc/callback`. On a private HTTP network that is `http://edge-watch.internal:3847/api/session/oidc/callback`.
+3. Certificates & secrets: create a client secret and put it in `OIDC_CLIENT_SECRET`.
+4. If you set `OIDC_ALLOWED_GROUPS`, add a groups claim or an app role in Token configuration. Entra omits groups when someone is in too many of them. An app role avoids that gap.
+
+```bash
+MONITOR_USERNAME=admin
+MONITOR_PASSWORD=replace-with-a-long-password
+OIDC_TENANT_ID=
+OIDC_CLIENT_ID=
+OIDC_CLIENT_SECRET=
+OIDC_REDIRECT_URI=http://edge-watch.internal:3847/api/session/oidc/callback
+OIDC_ALLOWED_GROUPS=
+```
+
+`APP_URL` can stand in for the redirect URI. Edge Watch appends `/api/session/oidc/callback`. Leave `MONITOR_COOKIE_SECURE=false` when browsers reach the app over plain HTTP. Set it to `true` when a reverse proxy terminates HTTPS. A session lasts 12 hours.
 
 ## Install with Docker
 
@@ -93,4 +119,4 @@ The same monitor is available as a local LibreNMS plugin under `librenms-plugin/
 
 ## What gets stored
 
-SQLite lives in `DATA_DIR` (`./data` for a Node install, `/data` in the container). It holds the SBC password, the SMTP password, trunk state, and alert history. The monitor only sends `GET` requests after login. It does not change the SBC.
+SQLite lives in `DATA_DIR` (`./data` for a Node install, `/data` in the container). It holds the SBC password, the SMTP password, the local account password hash, session hashes, trunk state, and alert history. The monitor only sends `GET` requests after login. It does not change the SBC.

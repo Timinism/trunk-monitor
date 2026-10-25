@@ -121,6 +121,27 @@ function openDatabase(): DatabaseSync {
       email_status TEXT NOT NULL,
       email_detail TEXT NOT NULL DEFAULT ''
     );
+    CREATE TABLE IF NOT EXISTS local_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS local_users_username ON local_users(username COLLATE NOCASE);
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      username TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      attempted_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS login_attempts_user ON login_attempts(username, attempted_at);
   `);
   const columns = db.prepare("PRAGMA table_info(trunk_state)").all() as { name: string }[];
   const additions: [string, string][] = [

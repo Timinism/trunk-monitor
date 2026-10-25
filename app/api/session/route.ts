@@ -1,32 +1,40 @@
-import { cookies } from "next/headers";
-import {
-  SESSION_COOKIE,
-  monitorPassword,
-  passwordMatches,
-  sessionToken,
-} from "@/lib/auth";
+import { authenticateLocal, createSession, localLoginAvailable } from "@/lib/accounts";
+import { clearAuthCookies, currentSession, writeSessionCookie } from "@/lib/auth";
+import { oidcConfigured } from "@/lib/oidc";
+
+const noStore = { "Cache-Control": "no-store" };
+
+export async function GET() {
+  const session = await currentSession();
+  return Response.json(
+    {
+      locked: session === null,
+      local: localLoginAvailable(),
+      oidc: oidcConfigured(),
+      user: session ? { name: session.displayName, kind: session.kind } : null,
+    },
+    { headers: noStore },
+  );
+}
 
 export async function POST(request: Request) {
-  const password = monitorPassword();
-  if (!password) return Response.json({ ok: true, required: false });
-  const body = (await request.json().catch(() => null)) as { password?: unknown } | null;
-  const submitted = typeof body?.password === "string" ? body.password : "";
-  if (!passwordMatches(password, submitted)) {
-    return Response.json({ error: "Wrong password." }, { status: 401 });
+  const body = (await request.json().catch(() => null)) as { username?: unknown; password?: unknown } | null;
+  const username = typeof body?.username === "string" ? body.username : "";
+  const password = typeof body?.password === "string" ? body.password : "";
+  const result = authenticateLocal(username, password);
+  if (!result.ok) {
+    const status = result.reason === "limited" ? 429 : 401;
+    const error =
+      result.reason === "limited"
+        ? "Too many attempts. Wait 15 minutes and try again."
+        : "Wrong username or password.";
+    return Response.json({ error }, { status, headers: noStore });
   }
-  const jar = await cookies();
-  jar.set(SESSION_COOKIE, sessionToken(password), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.MONITOR_COOKIE_SECURE === "true",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 14,
-  });
-  return Response.json({ ok: true, required: true });
+  await writeSessionCookie(createSession({ kind: "local", username: result.username, displayName: result.username }));
+  return Response.json({ ok: true }, { headers: noStore });
 }
 
 export async function DELETE() {
-  const jar = await cookies();
-  jar.delete(SESSION_COOKIE);
-  return Response.json({ ok: true });
+  await clearAuthCookies();
+  return Response.json({ ok: true }, { headers: noStore });
 }

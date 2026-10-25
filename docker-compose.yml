@@ -25,8 +25,16 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-Edge Watch <edge-watch@localhost>}
+      MONITOR_USERNAME: ${MONITOR_USERNAME:-admin}
       MONITOR_PASSWORD: ${MONITOR_PASSWORD:-}
       MONITOR_COOKIE_SECURE: ${MONITOR_COOKIE_SECURE:-false}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      OIDC_TENANT_ID: ${OIDC_TENANT_ID:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      APP_URL: ${APP_URL:-}
+      OIDC_ALLOWED_GROUPS: ${OIDC_ALLOWED_GROUPS:-}
     volumes:
       - edge-watch-data:/data
     restart: unless-stopped

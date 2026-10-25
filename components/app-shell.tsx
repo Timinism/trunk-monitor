@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
+import { AccountMenu } from "@/components/account-menu";
 
 const links = [
   { href: "/", label: "Trunks" },
@@ -30,23 +31,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="mt-1 block text-xs text-muted-foreground">Ribbon SBC Edge trunk monitor</span>
             </span>
           </Link>
-          <nav className="flex gap-1 overflow-x-auto">
-            {links.map((link) => {
-              const active = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={cn(
-                    "rounded-lg px-3 py-1.5 text-sm",
-                    active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <nav className="flex gap-1 overflow-x-auto">
+              {links.map((link) => {
+                const active = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-sm",
+                      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </nav>
+            <AccountMenu />
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>
