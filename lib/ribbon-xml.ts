@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import { RibbonError } from "./errors";
 import { classifyHealth, normalizeAdmin, normalizeStatus, statusLabel } from "./status";
-import type { TrunkObservation } from "./types";
+import { emptyCallStats, type CallStats, type TrunkObservation } from "./types";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -82,6 +82,34 @@ function integerOrNull(value: string): number | null {
   if (!value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+const CALL_STAT_FIELDS: Record<keyof CallStats, string> = {
+  ingressCurrent: "rt_NumIngressCurrentCalls",
+  egressCurrent: "rt_NumEgressCurrentCalls",
+  connected: "rt_NumConnectedCalls",
+  total: "rt_NumTotalCalls",
+  refused: "rt_NumRefusedCalls",
+  blocked: "rt_NumBlockedCalls",
+  errored: "rt_NumErroredCalls",
+  ingressAttempts: "rt_NumIngressCallAttempts",
+  ingressAccepted: "rt_NumIngressCallsAccepted",
+  ingressCompleted: "rt_NumIngressCallsCompleted",
+  ingressRejected: "rt_NumIngressCallsRejected",
+  ingressBlocked: "rt_NumIngressCallsBlocked",
+  egressAttempts: "rt_NumEgressCallAttempts",
+  egressAccepted: "rt_NumEgressCallsAccepted",
+  egressCompleted: "rt_NumEgressCallsCompleted",
+  egressRejected: "rt_NumEgressCallsRejected",
+  egressBlocked: "rt_NumEgressCallsBlocked",
+};
+
+function callStats(node: Record<string, unknown>): CallStats {
+  const stats = emptyCallStats();
+  for (const key of Object.keys(CALL_STAT_FIELDS) as (keyof CallStats)[]) {
+    stats[key] = integerOrNull(field(node, CALL_STAT_FIELDS[key]));
+  }
+  return stats;
 }
 
 const PROTOCOLS: Record<string, string> = {
@@ -179,6 +207,7 @@ export function parseSignalingGroups(xml: string): ParsedSignalingGroup[] {
       adminState: stub ? "unknown" : adminState,
       channels: integerOrNull(field(node, "rt_NumberOfChannels") || field(node, "Channels")),
       currentCalls: integerOrNull(field(node, "rt_NumCurrentCalls")),
+      calls: stub ? emptyCallStats() : callStats(node),
       peers: [],
       interop: INTEROP[field(node, "InteropMode").toLowerCase()] ?? "",
       protocol: listeners(node),

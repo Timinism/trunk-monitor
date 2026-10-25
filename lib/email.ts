@@ -55,7 +55,7 @@ export function renderTrunkMail(input: {
     `SBC: ${sbc}${input.sbcHost ? ` (${input.sbcHost})` : ""}`,
     `Admin: ${input.trunk.adminState}`,
     `Channels: ${input.trunk.channels ?? "unknown"}`,
-    `Active calls: ${input.trunk.currentCalls ?? "unknown"}`,
+    `Active calls: ${input.trunk.currentCalls ?? "unknown"} (${input.trunk.calls.ingressCurrent ?? "unknown"} in, ${input.trunk.calls.egressCurrent ?? "unknown"} out, ${input.trunk.calls.connected ?? "unknown"} connected)`,
     `Peers: ${input.trunk.peers.join(", ") || "none reported"}`,
     `Listen: ${input.trunk.protocol || "not reported"}`,
     `Interop: ${input.trunk.interop || "not reported"}`,

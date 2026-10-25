@@ -113,6 +113,7 @@ export class RibbonClient {
         adminState: group.adminState,
         channels: group.channels,
         currentCalls: group.currentCalls,
+        calls: group.calls,
         peers: peersByCluster.get(group.serverClusterId) ?? [],
         interop: group.interop,
         protocol: group.protocol,

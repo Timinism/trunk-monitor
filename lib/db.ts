@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { AdminState, AlertEvent, EmailStatus, EventKind, Health, MonitorMode } from "./types";
+import { emptyCallStats, type AdminState, type AlertEvent, type CallStats, type EmailStatus, type EventKind, type Health, type MonitorMode } from "./types";
 
 export type StoredTrunk = {
   id: string;
@@ -14,6 +14,7 @@ export type StoredTrunk = {
   adminState: AdminState;
   channels: number | null;
   currentCalls: number | null;
+  calls: CallStats;
   peers: string[];
   interop: string;
   protocol: string;
@@ -78,7 +79,8 @@ function openDatabase(): DatabaseSync {
       down_since TEXT,
       last_alert_at TEXT,
       simulated INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      call_stats TEXT
     );
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,6 +94,10 @@ function openDatabase(): DatabaseSync {
       email_detail TEXT NOT NULL DEFAULT ''
     );
   `);
+  const columns = db.prepare("PRAGMA table_info(trunk_state)").all() as { name: string }[];
+  if (!columns.some((column) => column.name === "call_stats")) {
+    db.exec("ALTER TABLE trunk_state ADD COLUMN call_stats TEXT");
+  }
   return db;
 }
 
@@ -156,6 +162,7 @@ type TrunkRow = {
   admin_state: AdminState;
   channels: number | null;
   current_calls: number | null;
+  call_stats: string | null;
   peers: string;
   interop: string;
   protocol: string;
@@ -164,6 +171,15 @@ type TrunkRow = {
   simulated: number;
   updated_at: string;
 };
+
+function parseCallStats(raw: string | null): CallStats {
+  if (!raw) return emptyCallStats();
+  try {
+    return { ...emptyCallStats(), ...(JSON.parse(raw) as Partial<CallStats>) };
+  } catch {
+    return emptyCallStats();
+  }
+}
 
 function trunkFromRow(row: TrunkRow): StoredTrunk {
   return {
@@ -177,6 +193,7 @@ function trunkFromRow(row: TrunkRow): StoredTrunk {
     adminState: row.admin_state,
     channels: row.channels,
     currentCalls: row.current_calls,
+    calls: parseCallStats(row.call_stats),
     peers: JSON.parse(row.peers) as string[],
     interop: row.interop,
     protocol: row.protocol,
@@ -200,8 +217,8 @@ export function replaceTrunks(trunks: StoredTrunk[]) {
     INSERT INTO trunk_state (
       id, name, health, alarm_health, alarming, raw_status, status_label, admin_state,
       channels, current_calls, peers, interop, protocol, down_since, last_alert_at,
-      simulated, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      simulated, updated_at, call_stats
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   db.exec("BEGIN");
   try {
@@ -225,6 +242,7 @@ export function replaceTrunks(trunks: StoredTrunk[]) {
         trunk.lastAlertAt,
         trunk.simulated ? 1 : 0,
         trunk.updatedAt,
+        JSON.stringify(trunk.calls),
       );
     }
     db.exec("COMMIT");

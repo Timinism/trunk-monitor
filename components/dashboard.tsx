@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import type { AlertEvent, Dashboard, Health, TrunkView } from "@/lib/types";
+import type { AlertEvent, CallStats, Dashboard, Health, TrunkView } from "@/lib/types";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -318,7 +318,98 @@ function TrunkCard({
           <div className="h-full bg-primary" style={{ width: `${used}%` }} />
         </div>
       ) : null}
+      {hasCallStats(trunk.calls) ? <CallMetrics calls={trunk.calls} /> : null}
     </article>
+  );
+}
+
+function hasCallStats(calls: CallStats): boolean {
+  return Object.values(calls).some((value) => value != null);
+}
+
+function formatCount(value: number | null): string {
+  return value == null ? "—" : value.toLocaleString();
+}
+
+function Metric({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="rounded-lg bg-background/50 px-2.5 py-1.5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="font-medium tabular-nums">{formatCount(value)}</div>
+    </div>
+  );
+}
+
+function DirectionMetrics({
+  title,
+  attempts,
+  accepted,
+  completed,
+  rejected,
+  blocked,
+}: {
+  title: string;
+  attempts: number | null;
+  accepted: number | null;
+  completed: number | null;
+  rejected: number | null;
+  blocked: number | null;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">{title}</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <Metric label="Attempts" value={attempts} />
+        <Metric label="Accepted" value={accepted} />
+        <Metric label="Completed" value={completed} />
+        <Metric label="Rejected" value={rejected} />
+        <Metric label="Blocked" value={blocked} />
+      </div>
+    </div>
+  );
+}
+
+function CallMetrics({ calls }: { calls: CallStats }) {
+  return (
+    <div className="mt-4 grid gap-4 border-t border-border/70 pt-3">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">Right now</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <Metric label="In" value={calls.ingressCurrent} />
+            <Metric label="Out" value={calls.egressCurrent} />
+            <Metric label="Connected" value={calls.connected} />
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">Since the counters started</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Metric label="Total" value={calls.total} />
+            <Metric label="Refused" value={calls.refused} />
+            <Metric label="Blocked" value={calls.blocked} />
+            <Metric label="Errored" value={calls.errored} />
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <DirectionMetrics
+          title="Ingress"
+          attempts={calls.ingressAttempts}
+          accepted={calls.ingressAccepted}
+          completed={calls.ingressCompleted}
+          rejected={calls.ingressRejected}
+          blocked={calls.ingressBlocked}
+        />
+        <DirectionMetrics
+          title="Egress"
+          attempts={calls.egressAttempts}
+          accepted={calls.egressAccepted}
+          completed={calls.egressCompleted}
+          rejected={calls.egressRejected}
+          blocked={calls.egressBlocked}
+        />
+      </div>
+    </div>
   );
 }
 

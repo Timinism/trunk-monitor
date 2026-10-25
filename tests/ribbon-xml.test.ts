@@ -16,6 +16,23 @@ const DETAILS = `<?xml version="1.0"?>
     <rt_Status>0</rt_Status>
     <rt_NumberOfChannels>24</rt_NumberOfChannels>
     <rt_NumCurrentCalls>4</rt_NumCurrentCalls>
+    <rt_NumIngressCurrentCalls>3</rt_NumIngressCurrentCalls>
+    <rt_NumEgressCurrentCalls>1</rt_NumEgressCurrentCalls>
+    <rt_NumConnectedCalls>4</rt_NumConnectedCalls>
+    <rt_NumTotalCalls>900</rt_NumTotalCalls>
+    <rt_NumRefusedCalls>2</rt_NumRefusedCalls>
+    <rt_NumBlockedCalls>1</rt_NumBlockedCalls>
+    <rt_NumErroredCalls>0</rt_NumErroredCalls>
+    <rt_NumIngressCallAttempts>500</rt_NumIngressCallAttempts>
+    <rt_NumIngressCallsAccepted>480</rt_NumIngressCallsAccepted>
+    <rt_NumIngressCallsCompleted>470</rt_NumIngressCallsCompleted>
+    <rt_NumIngressCallsRejected>8</rt_NumIngressCallsRejected>
+    <rt_NumIngressCallsBlocked>1</rt_NumIngressCallsBlocked>
+    <rt_NumEgressCallAttempts>400</rt_NumEgressCallAttempts>
+    <rt_NumEgressCallsAccepted>390</rt_NumEgressCallsAccepted>
+    <rt_NumEgressCallsCompleted>388</rt_NumEgressCallsCompleted>
+    <rt_NumEgressCallsRejected>3</rt_NumEgressCallsRejected>
+    <rt_NumEgressCallsBlocked>0</rt_NumEgressCallsBlocked>
   </sipsg>
   <sipsg id="4" href="https://sbc.example/rest/sipsg/4">
     <Description>Fax</Description>
@@ -35,6 +52,14 @@ describe("ribbon xml", () => {
     assert.equal(groups[0].statusLabel, "Up");
     assert.equal(groups[0].channels, 24);
     assert.equal(groups[0].currentCalls, 4);
+    assert.equal(groups[0].calls.ingressCurrent, 3);
+    assert.equal(groups[0].calls.egressCurrent, 1);
+    assert.equal(groups[0].calls.connected, 4);
+    assert.equal(groups[0].calls.total, 900);
+    assert.equal(groups[0].calls.refused, 2);
+    assert.equal(groups[0].calls.ingressAttempts, 500);
+    assert.equal(groups[0].calls.egressBlocked, 0);
+    assert.equal(groups[1].calls.total, null);
     assert.equal(groups[0].protocol, "UDP 5060");
     assert.equal(groups[0].interop, "Standard");
     assert.equal(groups[0].serverClusterId, "3");

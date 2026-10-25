@@ -2,7 +2,7 @@
 
 Edge Watch polls a [Ribbon SBC Edge](https://ribboncommunications.com/) (SBC 1000, SBC 2000, or SBC SWe Edge) and shows the status of every SIP signaling group. On that platform the signaling group is the SIP trunk. When a trunk goes down, Edge Watch sends an email and keeps a copy of the message in the alert log.
 
-The poller logs in to the SBC REST API, then reads `GET /rest/sipsg`. Operational state comes from `rt_Status`:
+The poller logs in to the SBC REST API, then reads `GET /rest/sipsg`. It does not change the SBC. Operational state comes from `rt_Status`. The same response supplies the call counters on each trunk: active calls, channels, ingress and egress calls in progress, connected calls, and the cumulative attempt, accepted, completed, rejected, refused, blocked, and errored totals.
 
 | Value | Meaning | Alarm |
 | --- | --- | --- |

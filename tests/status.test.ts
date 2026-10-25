@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { evaluateAlarms, isAlarming, matchesWatchFilter } from "../lib/status";
-import type { TrunkObservation } from "../lib/types";
+import { emptyCallStats, type TrunkObservation } from "../lib/types";
 
 function trunk(partial: Partial<TrunkObservation> & Pick<TrunkObservation, "id" | "health">): TrunkObservation {
   return {
@@ -11,6 +11,7 @@ function trunk(partial: Partial<TrunkObservation> & Pick<TrunkObservation, "id" 
     adminState: partial.adminState ?? "enabled",
     channels: partial.channels ?? 24,
     currentCalls: partial.currentCalls ?? 0,
+    calls: partial.calls ?? emptyCallStats(),
     peers: partial.peers ?? [],
     interop: partial.interop ?? "Standard",
     protocol: partial.protocol ?? "UDP 5060",

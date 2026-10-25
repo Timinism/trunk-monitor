@@ -42,6 +42,48 @@ export type PublicSettings = Omit<Settings, "sbcPassword" | "smtpPassword"> & {
   smtpPasswordSet: boolean;
 };
 
+export type CallStats = {
+  ingressCurrent: number | null;
+  egressCurrent: number | null;
+  connected: number | null;
+  total: number | null;
+  refused: number | null;
+  blocked: number | null;
+  errored: number | null;
+  ingressAttempts: number | null;
+  ingressAccepted: number | null;
+  ingressCompleted: number | null;
+  ingressRejected: number | null;
+  ingressBlocked: number | null;
+  egressAttempts: number | null;
+  egressAccepted: number | null;
+  egressCompleted: number | null;
+  egressRejected: number | null;
+  egressBlocked: number | null;
+};
+
+export function emptyCallStats(): CallStats {
+  return {
+    ingressCurrent: null,
+    egressCurrent: null,
+    connected: null,
+    total: null,
+    refused: null,
+    blocked: null,
+    errored: null,
+    ingressAttempts: null,
+    ingressAccepted: null,
+    ingressCompleted: null,
+    ingressRejected: null,
+    ingressBlocked: null,
+    egressAttempts: null,
+    egressAccepted: null,
+    egressCompleted: null,
+    egressRejected: null,
+    egressBlocked: null,
+  };
+}
+
 export type TrunkObservation = {
   id: string;
   name: string;
@@ -51,6 +93,7 @@ export type TrunkObservation = {
   adminState: AdminState;
   channels: number | null;
   currentCalls: number | null;
+  calls: CallStats;
   peers: string[];
   interop: string;
   protocol: string;
@@ -84,6 +127,7 @@ export type TrunkView = {
   adminState: AdminState;
   channels: number | null;
   currentCalls: number | null;
+  calls: CallStats;
   peers: string[];
   interop: string;
   protocol: string;

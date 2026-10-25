@@ -1,5 +1,5 @@
 import { classifyHealth, statusLabel } from "./status";
-import type { AdminState, SipSgStatus, TrunkObservation } from "./types";
+import type { AdminState, CallStats, SipSgStatus, TrunkObservation } from "./types";
 
 type DemoBase = {
   id: string;
@@ -8,6 +8,7 @@ type DemoBase = {
   admin: AdminState;
   channels: number;
   currentCalls: number;
+  calls: CallStats;
   peers: string[];
   interop: string;
   protocol: string;
@@ -21,6 +22,25 @@ export const DEMO_TRUNKS: DemoBase[] = [
     admin: "enabled",
     channels: 24,
     currentCalls: 6,
+    calls: {
+      ingressCurrent: 4,
+      egressCurrent: 2,
+      connected: 5,
+      total: 18420,
+      refused: 37,
+      blocked: 6,
+      errored: 2,
+      ingressAttempts: 10240,
+      ingressAccepted: 9901,
+      ingressCompleted: 9744,
+      ingressRejected: 88,
+      ingressBlocked: 4,
+      egressAttempts: 8210,
+      egressAccepted: 7988,
+      egressCompleted: 7902,
+      egressRejected: 41,
+      egressBlocked: 2,
+    },
     peers: ["sip.lumen.example:5060"],
     interop: "Standard",
     protocol: "UDP 5060",
@@ -32,6 +52,25 @@ export const DEMO_TRUNKS: DemoBase[] = [
     admin: "enabled",
     channels: 24,
     currentCalls: 0,
+    calls: {
+      ingressCurrent: 0,
+      egressCurrent: 0,
+      connected: 0,
+      total: 640,
+      refused: 4,
+      blocked: 1,
+      errored: 0,
+      ingressAttempts: 410,
+      ingressAccepted: 390,
+      ingressCompleted: 388,
+      ingressRejected: 9,
+      ingressBlocked: 1,
+      egressAttempts: 230,
+      egressAccepted: 226,
+      egressCompleted: 224,
+      egressRejected: 3,
+      egressBlocked: 0,
+    },
     peers: ["sip-backup.lumen.example:5060"],
     interop: "Standard",
     protocol: "UDP 5060",
@@ -43,6 +82,25 @@ export const DEMO_TRUNKS: DemoBase[] = [
     admin: "enabled",
     channels: 100,
     currentCalls: 18,
+    calls: {
+      ingressCurrent: 11,
+      egressCurrent: 7,
+      connected: 16,
+      total: 45210,
+      refused: 120,
+      blocked: 14,
+      errored: 9,
+      ingressAttempts: 26110,
+      ingressAccepted: 24880,
+      ingressCompleted: 24602,
+      ingressRejected: 310,
+      ingressBlocked: 9,
+      egressAttempts: 19440,
+      egressAccepted: 18990,
+      egressCompleted: 18840,
+      egressRejected: 142,
+      egressBlocked: 5,
+    },
     peers: ["sip.pstnhub.microsoft.com:5061"],
     interop: "Office 365",
     protocol: "TLS 5061",
@@ -54,6 +112,25 @@ export const DEMO_TRUNKS: DemoBase[] = [
     admin: "disabled",
     channels: 4,
     currentCalls: 0,
+    calls: {
+      ingressCurrent: 0,
+      egressCurrent: 0,
+      connected: 0,
+      total: 120,
+      refused: 0,
+      blocked: 0,
+      errored: 1,
+      ingressAttempts: 80,
+      ingressAccepted: 74,
+      ingressCompleted: 73,
+      ingressRejected: 2,
+      ingressBlocked: 0,
+      egressAttempts: 46,
+      egressAccepted: 44,
+      egressCompleted: 44,
+      egressRejected: 1,
+      egressBlocked: 0,
+    },
     peers: ["10.20.4.15:5060"],
     interop: "Standard",
     protocol: "UDP 5060",
@@ -83,6 +160,9 @@ export function buildDemoTrunks(downIds: Iterable<string>): TrunkObservation[] {
       adminState,
       channels: base.channels,
       currentCalls: simulated ? 0 : base.currentCalls,
+      calls: simulated
+        ? { ...base.calls, ingressCurrent: 0, egressCurrent: 0, connected: 0 }
+        : base.calls,
       peers: base.peers,
       interop: base.interop,
       protocol: base.protocol,
